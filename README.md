@@ -8,8 +8,8 @@ Forge IDE is a Deskapp product — not affiliated with Cursor. It provides a fil
 
 - **Explorer** — open a folder via the native dialog; tree navigation scoped to that workspace
 - **Editor** — Monaco multi-tab editing with syntax highlighting, dirty indicators, Ctrl/Cmd+S save
-- **Forge Agent** — chat sidebar; local stub by default, optional OpenAI-compatible provider via env
-- **Terminal** — command + stdout/stderr runner in the open workspace (not a full PTY)
+- **Forge Agent** — streaming chat sidebar; offline stub by default, optional OpenAI-compatible provider via env
+- **Terminal** — interactive PTY (`xterm.js` + `portable-pty`) in the Tauri app; cancellable command runner with history in browser preview
 - **Least-privilege FS** — Rust-side path checks keep reads/writes/commands under the opened folder
 
 ## Prerequisites (Windows)
@@ -61,6 +61,7 @@ Copy `.env.example` to `.env`:
 ```bash
 VITE_LLM_API_KEY=sk-...
 VITE_LLM_API_URL=https://api.openai.com/v1/chat/completions
+VITE_LLM_MODEL=gpt-4o-mini
 ```
 
 Restart `pnpm tauri dev` after changing env vars.

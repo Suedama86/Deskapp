@@ -6,7 +6,7 @@ const FILES: Record<string, string> = {
   [`${DEMO_ROOT}/README.md`]: `# Forge demo workspace
 
 This browser preview uses an in-memory demo filesystem.
-Run \`pnpm tauri dev\` for real folders, save, and terminal.
+Run \`pnpm tauri dev\` for real folders, PTY terminal, and save.
 `,
   [`${DEMO_ROOT}/package.json`]: `{
   "name": "forge-demo",
@@ -24,6 +24,8 @@ Run \`pnpm tauri dev\` for real folders, save, and terminal.
 `,
 };
 
+let cancelFlag = false;
+
 function childrenOf(dir: string): DirNode[] {
   const prefix = dir.endsWith("/") ? dir : `${dir}/`;
   const names = new Set<string>();
@@ -36,26 +38,17 @@ function childrenOf(dir: string): DirNode[] {
     if (!segment || names.has(segment)) continue;
     names.add(segment);
     const full = `${prefix}${segment}`;
-    const isDir = Object.keys(FILES).some(
-      (p) => p.startsWith(`${full}/`) || (p !== full && p.startsWith(full)),
-    ) && !FILES[full];
     nodes.push({
       name: segment,
       path: full,
-      isDir: isDir || Object.keys(FILES).some((p) => p.startsWith(`${full}/`)),
+      isDir: !FILES[full],
     });
   }
 
-  // Fix isDir for paths that are only directories
-  return nodes
-    .map((n) => ({
-      ...n,
-      isDir: !FILES[n.path],
-    }))
-    .sort((a, b) => {
-      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
+  return nodes.sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 export const demoApi = {
@@ -70,10 +63,29 @@ export const demoApi = {
   writeFile: async (path: string, contents: string): Promise<void> => {
     FILES[path] = contents;
   },
-  runCommand: async (command: string): Promise<CommandResult> => ({
-    stdout: `[demo] simulated output for: ${command}\nforge-demo 0.1.0`,
-    stderr: "",
-    exitCode: 0,
-    cwd: DEMO_ROOT,
-  }),
+  cancelCommand: () => {
+    cancelFlag = true;
+  },
+  runCommand: async (command: string): Promise<CommandResult> => {
+    cancelFlag = false;
+    // Simulate a short-running command so Cancel is exercisable in demos.
+    for (let i = 0; i < 8; i++) {
+      if (cancelFlag) throw new Error("Command cancelled");
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    if (command.trim() === "fail") {
+      return {
+        stdout: "",
+        stderr: "demo: simulated failure\n",
+        exitCode: 1,
+        cwd: DEMO_ROOT,
+      };
+    }
+    return {
+      stdout: `[demo] ${command}\nfiles: README.md  package.json  src/\n`,
+      stderr: "",
+      exitCode: 0,
+      cwd: DEMO_ROOT,
+    };
+  },
 };

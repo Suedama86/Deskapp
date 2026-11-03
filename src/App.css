@@ -153,6 +153,108 @@ textarea {
   font-weight: 700;
 }
 
+.badge.stub {
+  background: #5d718a;
+  color: #e7eef8;
+}
+
+.ai-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-bubble.streaming {
+  border-color: rgba(62, 207, 142, 0.45);
+}
+
+.chat-bubble .caret {
+  color: var(--accent);
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.chat-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ghost-btn.danger {
+  border-color: rgba(255, 107, 122, 0.45);
+  color: var(--danger);
+}
+
+.terminal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.term-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-panel.pty {
+  height: 240px;
+}
+
+.xterm-host {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 8px 8px;
+  background: #0a0d11;
+}
+
+.xterm-host .xterm {
+  height: 100%;
+}
+
+.xterm-host .xterm-viewport {
+  overflow-y: auto !important;
+}
+
+.tab.dirty .tab-label::after {
+  content: "";
+}
+
+.tab .dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.empty-pane.editor-empty kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: var(--bg-2);
+  color: var(--text);
+}
+
 .ghost-btn,
 .primary-btn {
   border: 1px solid var(--border);

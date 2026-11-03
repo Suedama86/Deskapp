@@ -2,13 +2,19 @@ use serde::Serialize;
 use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
-use std::sync::Mutex;
+use std::process::{Child, Command};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Default)]
 pub struct WorkspaceState {
     pub root: Mutex<Option<String>>,
+}
+
+/// Tracks the in-flight command-runner child so the UI can cancel it.
+#[derive(Default)]
+pub struct RunningCommand {
+    pub child: Mutex<Option<Child>>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -44,6 +50,10 @@ fn normalize_path(path: &Path) -> Result<PathBuf, String> {
         }
     }
     Ok(out)
+}
+
+pub fn resolve_under_workspace_pub(state: &WorkspaceState, path: &str) -> Result<PathBuf, String> {
+    resolve_under_workspace(state, path)
 }
 
 fn resolve_under_workspace(state: &WorkspaceState, path: &str) -> Result<PathBuf, String> {
@@ -151,8 +161,23 @@ pub fn write_text_file(
         .map_err(|e| format!("Failed to write file: {e}"))
 }
 
+pub fn cancel_running_command(running: &RunningCommand) -> Result<(), String> {
+    let mut guard = running
+        .child
+        .lock()
+        .map_err(|_| "Running command lock poisoned".to_string())?;
+    if let Some(mut child) = guard.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+        Ok(())
+    } else {
+        Err("No command is currently running".into())
+    }
+}
+
 pub fn run_shell_command(
     state: &WorkspaceState,
+    running: &RunningCommand,
     command: String,
     cwd: Option<String>,
 ) -> Result<CommandResult, String> {
@@ -185,9 +210,21 @@ pub fn run_shell_command(
         return Err("Empty command".into());
     }
 
-    // Non-interactive command runner (stdout/stderr capture). Full PTY is not
-    // wired here — keeps the surface small and avoids unrestricted shell tooling.
-    let mut child = if cfg!(target_os = "windows") {
+    // Ensure only one command-runner process is active at a time.
+    {
+        let mut guard = running
+            .child
+            .lock()
+            .map_err(|_| "Running command lock poisoned".to_string())?;
+        if let Some(mut existing) = guard.take() {
+            let _ = existing.kill();
+            let _ = existing.wait();
+        }
+    }
+
+    // Non-interactive command runner (stdout/stderr capture). Prefer the PTY
+    // panel for interactive shells; this path remains for one-shot commands.
+    let child = if cfg!(target_os = "windows") {
         Command::new("cmd")
             .args(["/C", &command])
             .current_dir(&workdir)
@@ -206,21 +243,62 @@ pub fn run_shell_command(
     }
     .map_err(|e| format!("Failed to spawn command: {e}"))?;
 
-    // Soft timeout guard so a hung process cannot freeze the IDE panel forever.
-    let start = std::time::Instant::now();
-    let timeout = Duration::from_secs(60);
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if start.elapsed() > timeout => {
-                let _ = child.kill();
-                return Err("Command timed out after 60s".into());
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(40)),
-            Err(e) => return Err(format!("Failed waiting for command: {e}")),
-        }
+    {
+        let mut guard = running
+            .child
+            .lock()
+            .map_err(|_| "Running command lock poisoned".to_string())?;
+        *guard = Some(child);
     }
 
+    // Soft timeout / cancel poll so hung processes cannot freeze the panel.
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(60);
+    let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    loop {
+        let finished = {
+            let mut guard = running
+                .child
+                .lock()
+                .map_err(|_| "Running command lock poisoned".to_string())?;
+            match guard.as_mut() {
+                None => {
+                    cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+                    true
+                }
+                Some(child) => match child.try_wait() {
+                    Ok(Some(_)) => true,
+                    Ok(None) if start.elapsed() > timeout => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        *guard = None;
+                        return Err("Command timed out after 60s (killed)".into());
+                    }
+                    Ok(None) => false,
+                    Err(e) => {
+                        *guard = None;
+                        return Err(format!("Failed waiting for command: {e}"));
+                    }
+                },
+            }
+        };
+        if finished {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(40));
+    }
+
+    if cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err("Command cancelled".into());
+    }
+
+    let mut guard = running
+        .child
+        .lock()
+        .map_err(|_| "Running command lock poisoned".to_string())?;
+    let child = guard
+        .take()
+        .ok_or_else(|| "Command cancelled".to_string())?;
     let output = child
         .wait_with_output()
         .map_err(|e| format!("Failed to collect command output: {e}"))?;
