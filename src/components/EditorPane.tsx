@@ -36,13 +36,13 @@ export function EditorPane({
           tabs.map((tab) => (
             <div
               key={tab.path}
-              className={`tab${tab.path === activePath ? " active" : ""}`}
-              title={tab.path}
+              className={`tab${tab.path === activePath ? " active" : ""}${tab.dirty ? " dirty" : ""}`}
+              title={tab.dirty ? `${tab.path} (unsaved)` : tab.path}
             >
               <button type="button" className="tab-label" onClick={() => onSelect(tab.path)}>
                 {fileName(tab.path)}
-                {tab.dirty ? " •" : ""}
               </button>
+              {tab.dirty ? <span className="dirty-dot" title="Unsaved changes" /> : null}
               <button
                 type="button"
                 className="tab-close"
@@ -100,7 +100,11 @@ export function EditorPane({
           <div className="empty-pane editor-empty">
             <div className="brand-mark">Forge</div>
             <h2>Open a file to start editing</h2>
-            <p>Use the explorer on the left, or open a folder to begin.</p>
+            <p>
+              Open a folder in the explorer, then click a file.
+              Save with <kbd>Ctrl</kbd>+<kbd>S</kbd> · Terminal <kbd>Ctrl</kbd>+
+              <kbd>`</kbd> · Agent <kbd>Ctrl</kbd>+<kbd>L</kbd>
+            </p>
           </div>
         )}
       </div>

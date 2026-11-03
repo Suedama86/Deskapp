@@ -50,3 +50,35 @@ export async function runCommand(
   if (!isTauri()) return demoApi.runCommand(command);
   return invoke<CommandResult>("run_command", { command, cwd: cwd ?? null });
 }
+
+export async function cancelCommand(): Promise<void> {
+  if (!isTauri()) {
+    demoApi.cancelCommand();
+    return;
+  }
+  await invoke("cancel_command");
+}
+
+export async function ptyStart(
+  cols: number,
+  rows: number,
+  cwd?: string | null,
+): Promise<number> {
+  return invoke<number>("pty_start", { cols, rows, cwd: cwd ?? null });
+}
+
+export async function ptyWrite(id: number, data: string): Promise<void> {
+  return invoke("pty_write", { id, data });
+}
+
+export async function ptyResize(
+  id: number,
+  cols: number,
+  rows: number,
+): Promise<void> {
+  return invoke("pty_resize", { id, cols, rows });
+}
+
+export async function ptyKill(id: number): Promise<void> {
+  return invoke("pty_kill", { id });
+}
